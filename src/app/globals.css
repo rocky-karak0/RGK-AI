@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: 8 11 18; --bg2: 16 21 34; --surface: 23 29 45; --border: 38 48 68; --ink: 248 250 252; --muted: 148 163 184;
+  --accent: 99 102 241; --accent2: 59 130 246; --highlight: 139 92 246; --ok: 34 197 94; --err: 239 68 68;
+  color-scheme: dark;
+}
+:root.light {
+  --bg: 248 250 252; --bg2: 241 245 249; --surface: 255 255 255; --border: 203 213 225; --ink: 15 23 42; --muted: 71 85 105;
+  --accent: 79 70 229; --accent2: 37 99 235; --highlight: 124 58 237; --ok: 22 163 74; --err: 220 38 38;
+  color-scheme: light;
+}
+html, body { height: 100%; }
+body { @apply bg-bg text-ink antialiased overflow-x-hidden; }
+*:focus-visible { @apply outline-2 outline-offset-2 outline-accent; }
+
+.glass { @apply bg-surface/60 backdrop-blur-xl border border-border; }
+.btn-primary {
+  @apply inline-flex items-center justify-center rounded-xl px-6 py-3 font-semibold text-white
+         bg-gradient-to-r from-accent via-highlight to-accent2 shadow-lg shadow-accent/20
+         transition hover:-translate-y-0.5 hover:shadow-accent/40;
+}
+.btn-ghost {
+  @apply inline-flex items-center justify-center rounded-xl px-6 py-3 font-semibold text-ink
+         border border-border bg-surface/40 transition hover:bg-surface;
+}
+@keyframes pop { from { opacity: 0; transform: translateY(6px) scale(.98); } to { opacity: 1; transform: none; } }
+.msg-in { animation: pop .18s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
