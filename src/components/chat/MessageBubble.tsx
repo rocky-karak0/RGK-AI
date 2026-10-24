@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
-import { useEffect, useRef, useState } from "react";
-import { Check, CheckCheck, Copy, CornerUpLeft, Eye, FileText, Flag, Pencil, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Check, CheckCheck, Copy, CornerUpLeft, FileText, Flag, Pencil, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { Msg, Reaction } from "@/types";
 
@@ -35,7 +35,6 @@ interface Props {
   m: Msg; mine: boolean; senderName?: string; replied?: Msg; reactions: Reaction[]; meId: string;
   read: boolean; showTicks: boolean;
   onReact: (e: string) => void; onReply: () => void; onEdit: (b: string) => void; onDelete: () => void; onRetry: () => void; onReport: () => void;
-  onViewOnce?: () => void;
 }
 
 export function MessageBubble(p: Props) {
@@ -43,39 +42,11 @@ export function MessageBubble(p: Props) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(m.body ?? "");
-  const rootRef = useRef<HTMLDivElement>(null);
-  const viewCb = useRef(p.onViewOnce);
-  viewCb.current = p.onViewOnce;
-
-  // Snapchat-style destroy: a received view-once message that stays visibly
-  // rendered (~60% on screen, tab focused) for 600ms is destroyed for everyone.
-  useEffect(() => {
-    if (mine || !m.view_once || m.status === "pending" || m.status === "failed") return;
-    if (typeof IntersectionObserver === "undefined" || !rootRef.current) return;
-    const el = rootRef.current;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const start = () => { if (!timer) timer = setTimeout(() => { timer = null; viewCb.current?.(); }, 600); };
-    const stop = () => { if (timer) { clearTimeout(timer); timer = null; } };
-    const io = new IntersectionObserver((entries) => {
-      if (entries.some((e) => e.isIntersecting) && !document.hidden) start(); else stop();
-    }, { threshold: 0.6 });
-    io.observe(el);
-    // messages that arrive while the tab is hidden only count once the user returns
-    const onVis = () => {
-      if (document.hidden) { stop(); return; }
-      const r = el.getBoundingClientRect();
-      const vh = window.innerHeight || document.documentElement.clientHeight;
-      if (Math.min(r.bottom, vh) - Math.max(r.top, 0) >= Math.min(r.height, vh) * 0.6) start();
-    };
-    document.addEventListener("visibilitychange", onVis);
-    return () => { io.disconnect(); stop(); document.removeEventListener("visibilitychange", onVis); };
-  }, [mine, m.view_once, m.status, m.id]);
-
   const counts = new Map<string, { n: number; mine: boolean }>();
   p.reactions.forEach((r) => { const c = counts.get(r.emoji) ?? { n: 0, mine: false }; counts.set(r.emoji, { n: c.n + 1, mine: c.mine || r.user_id === p.meId }); });
 
   return (
-    <div ref={rootRef} className={`msg-in flex ${mine ? "justify-end" : "justify-start"}`}>
+    <div className={`msg-in flex ${mine ? "justify-end" : "justify-start"}`}>
       <div className="max-w-[80%]">
         {!mine && p.senderName && <div className="mb-0.5 px-1 text-xs text-muted">{p.senderName}</div>}
         <div role="button" tabIndex={0} aria-label="Message options" onClick={() => setOpen((o) => !o)}
@@ -90,7 +61,6 @@ export function MessageBubble(p: Props) {
             </span>
           ) : m.body && m.kind === "text" ? <span className="whitespace-pre-wrap">{m.body}</span> : null}
           <span className="ml-2 inline-flex items-center gap-1 align-bottom text-[10px] opacity-70">
-            {m.view_once && <Eye className="h-3 w-3" aria-label="View once" />}
             {m.edited_at && "edited · "}{new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
             {mine && p.showTicks && m.status !== "pending" && (p.read ? <CheckCheck className="h-3 w-3 text-ok" aria-label="Read" /> : <Check className="h-3 w-3" aria-label="Sent" />)}
           </span>
@@ -107,7 +77,7 @@ export function MessageBubble(p: Props) {
           <div className="mt-1 flex flex-wrap items-center gap-1 rounded-xl border border-border bg-bg2 p-1">
             {QUICK.map((e) => <button key={e} aria-label={`React ${e}`} onClick={() => { p.onReact(e); setOpen(false); }} className="rounded-lg px-1.5 py-0.5 hover:bg-surface">{e}</button>)}
             <button aria-label="Reply" onClick={() => { p.onReply(); setOpen(false); }} className="rounded-lg p-1.5 hover:bg-surface"><CornerUpLeft className="h-4 w-4" /></button>
-            {m.body && !m.view_once && <button aria-label="Copy" onClick={() => { void navigator.clipboard.writeText(m.body ?? ""); setOpen(false); }} className="rounded-lg p-1.5 hover:bg-surface"><Copy className="h-4 w-4" /></button>}
+            {m.body && <button aria-label="Copy" onClick={() => { void navigator.clipboard.writeText(m.body ?? ""); setOpen(false); }} className="rounded-lg p-1.5 hover:bg-surface"><Copy className="h-4 w-4" /></button>}
             {mine && m.kind === "text" && <button aria-label="Edit" onClick={() => { setDraft(m.body ?? ""); setEditing(true); }} className="rounded-lg p-1.5 hover:bg-surface"><Pencil className="h-4 w-4" /></button>}
             {mine && <button aria-label="Delete" onClick={() => { p.onDelete(); setOpen(false); }} className="rounded-lg p-1.5 text-err hover:bg-surface"><Trash2 className="h-4 w-4" /></button>}
             {!mine && <button aria-label="Report" onClick={() => { p.onReport(); setOpen(false); }} className="rounded-lg p-1.5 hover:bg-surface"><Flag className="h-4 w-4" /></button>}

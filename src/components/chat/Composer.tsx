@@ -1,20 +1,19 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { Eye, Mic, Paperclip, Send, Smile, Square, Trash2 } from "lucide-react";
+import { Mic, Paperclip, Send, Smile, Square, Trash2 } from "lucide-react";
 import { validateFile } from "@/lib/validation";
 
 const EMOJI = ["😀", "😂", "😍", "👍", "🙏", "🎉", "😢", "🔥", "❤️", "😮", "🤝", "✅"];
 interface Props {
   disabled?: boolean;
-  onText: (t: string, opts?: { viewOnce?: boolean }) => void;
-  onFile: (f: File, opts?: { voice?: boolean; durationMs?: number; viewOnce?: boolean }) => void | Promise<void>;
+  onText: (t: string) => void;
+  onFile: (f: File, opts?: { voice?: boolean; durationMs?: number }) => void | Promise<void>;
   onTyping: () => void;
 }
 
 export function Composer({ disabled, onText, onFile, onTyping }: Props) {
   const [text, setText] = useState("");
   const [emoji, setEmoji] = useState(false);
-  const [viewOnce, setViewOnce] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [rec, setRec] = useState<"idle" | "recording" | "preview">("idle");
   const [secs, setSecs] = useState(0);
@@ -66,8 +65,7 @@ export function Composer({ disabled, onText, onFile, onTyping }: Props) {
     const ext = r.blob.type.includes("mp4") ? "m4a" : r.blob.type.includes("ogg") ? "ogg" : "webm";
     const file = new File([r.blob], `voice-${Date.now()}.${ext}`, { type: r.blob.type });
     discard();
-    await onFile(file, { voice: true, durationMs: r.ms, viewOnce });
-    setViewOnce(false);
+    await onFile(file, { voice: true, durationMs: r.ms });
   }
   function pick(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
@@ -75,12 +73,12 @@ export function Composer({ disabled, onText, onFile, onTyping }: Props) {
     if (!f) return;
     const v = validateFile(f);
     if (!v.ok) return setErr(v.error);
-    setErr(null); void onFile(f, { viewOnce }); setViewOnce(false);
+    setErr(null); void onFile(f);
   }
   function sendText() {
     const t = text.trim();
     if (!t) return;
-    onText(t, { viewOnce }); setText(""); setEmoji(false); setViewOnce(false);
+    onText(t); setText(""); setEmoji(false);
   }
   const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
@@ -96,13 +94,11 @@ export function Composer({ disabled, onText, onFile, onTyping }: Props) {
         <div className="flex items-center gap-2">
           <button aria-label="Attach file" disabled={disabled} onClick={() => fileRef.current?.click()} className="rounded-xl p-2.5 text-muted hover:bg-surface"><Paperclip className="h-5 w-5" /></button>
           <input ref={fileRef} type="file" className="hidden" onChange={pick} />
-          <button aria-label={viewOnce ? "View once: on" : "View once: off"} aria-pressed={viewOnce} disabled={disabled} title="View once — deleted for everyone after they see it"
-            onClick={() => setViewOnce((v) => !v)} className={`rounded-xl p-2.5 hover:bg-surface ${viewOnce ? "bg-accent/15 text-accent" : "text-muted"}`}><Eye className="h-5 w-5" /></button>
           <button aria-label="Emoji" disabled={disabled} onClick={() => setEmoji((v) => !v)} className="rounded-xl p-2.5 text-muted hover:bg-surface"><Smile className="h-5 w-5" /></button>
           <input aria-label="Message" value={text} disabled={disabled} maxLength={4000}
             onChange={(e) => { setText(e.target.value); onTyping(); }}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendText(); } }}
-            placeholder={disabled ? "You can't message this user" : viewOnce ? "View once — deletes after they see it" : "Type a message"}
+            placeholder={disabled ? "You can't message this user" : "Type a message"}
             className="min-w-0 flex-1 rounded-xl border border-border bg-surface px-4 py-3 placeholder:text-muted" />
           {text.trim() ? (
             <button aria-label="Send" onClick={sendText} className="btn-primary !px-4 !py-3"><Send className="h-5 w-5" /></button>

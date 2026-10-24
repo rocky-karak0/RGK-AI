@@ -9,7 +9,6 @@ export interface Msg {
   id: string; client_id: string; conversation_id: string; sender_id: string; kind: MsgKind;
   body: string | null; reply_to: string | null; created_at: string; edited_at: string | null; deleted_at: string | null;
   storage_path: string | null; file_name: string | null; file_size: number | null; mime_type: string | null; duration_ms: number | null;
-  view_once?: boolean;
   status?: "pending" | "failed";
 }
 export interface Reaction { message_id: string; user_id: string; emoji: string }
