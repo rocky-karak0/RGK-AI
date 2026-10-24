@@ -192,9 +192,10 @@ export function ChatApp({ meId }: { meId: string }) {
   }, []);
 
   // clear-on-exit (Snapchat): leaving a conversation (back button, switching
-  // chats, or leaving the page) destroys its messages for everyone — but only
-  // once every member has read everything; chat_clear keeps unread chats.
-  // The 400ms delay + guards cover StrictMode remount and quick re-entry.
+  // chats, or leaving the page) clears MY view of it — only me; the other
+  // member is untouched. chat_clear still keeps unread chats (all must have
+  // read everything first). The 400ms delay + guards cover StrictMode
+  // remount and quick re-entry.
   useEffect(() => {
     const cid = activeId;
     if (pendingExit.current === cid) {
@@ -221,8 +222,11 @@ export function ChatApp({ meId }: { meId: string }) {
     if (!activeId) return;
     let cancelled = false;
     (async () => {
+      // my_cleared_at: hide everything I already cleared when leaving this chat (only my view)
+      const cleared = convsRef.current.find((c) => c.id === activeId)?.my_cleared_at;
       const { data, error: e } = await supabase.from("messages").select("*").eq("conversation_id", activeId)
-        .is("deleted_at", null).order("created_at", { ascending: false }).limit(PAGE);
+        .is("deleted_at", null).gt("created_at", cleared ?? "1970-01-01T00:00:00Z")
+        .order("created_at", { ascending: false }).limit(PAGE);
       if (cancelled) return;
       if (e) return setError("Could not load messages.");
       const list = ((data as Msg[]) ?? []).reverse();
@@ -294,8 +298,10 @@ export function ChatApp({ meId }: { meId: string }) {
 
   async function loadOlder() {
     if (!activeId || !msgs.length) return;
+    const cleared = convsRef.current.find((c) => c.id === activeId)?.my_cleared_at;
     const { data } = await supabase.from("messages").select("*").eq("conversation_id", activeId)
-      .is("deleted_at", null).lt("created_at", msgs[0].created_at).order("created_at", { ascending: false }).limit(PAGE);
+      .is("deleted_at", null).gt("created_at", cleared ?? "1970-01-01T00:00:00Z")
+      .lt("created_at", msgs[0].created_at).order("created_at", { ascending: false }).limit(PAGE);
     const older = ((data as Msg[]) ?? []).reverse();
     setMsgs((cur) => [...older, ...cur]); setHasMore(older.length === PAGE);
     void ensure(older.map((m) => m.sender_id));

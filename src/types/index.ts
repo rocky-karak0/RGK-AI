@@ -2,7 +2,7 @@ export interface Profile { id: string; username: string; full_name: string; avat
 export interface ConvSummary {
   id: string; kind: "direct" | "group"; title: string | null; description: string | null;
   last_body: string | null; last_kind: string | null; last_at: string | null;
-  unread: number; other_id: string | null; my_role: string;
+  unread: number; other_id: string | null; my_role: string; my_cleared_at?: string | null;
 }
 export type MsgKind = "text" | "image" | "video" | "audio" | "file" | "voice";
 export interface Msg {
