@@ -130,7 +130,7 @@ export function ChatApp({ meId }: { meId: string }) {
           const allowed = conv?.kind === "group" ? s.notify_groups : s.notify_messages;
           if (allowed && (!isActive || document.hidden) && typeof Notification !== "undefined" && Notification.permission === "granted") {
             const who = peopleRef.current[m.sender_id]?.full_name || "New message";
-            const body = m.kind === "text" ? (m.body ?? "") : "Sent an attachment";
+            const body = m.view_once ? "Sent a view-once message" : m.kind === "text" ? (m.body ?? "") : "Sent an attachment";
             void navigator.serviceWorker?.ready.then((r) => r.showNotification(who, { body, icon: "/icons/icon-192.png" })).catch(() => new Notification(who, { body }));
           }
         }
@@ -282,7 +282,8 @@ export function ChatApp({ meId }: { meId: string }) {
     const row: Msg = {
       id: client_id, client_id, conversation_id: cid, sender_id: meId, kind: base.kind, body: base.body ?? null,
       reply_to: retryId ? (base.reply_to ?? null) : (replyTo?.id ?? null), created_at: new Date().toISOString(), edited_at: null, deleted_at: null,
-      storage_path: null, file_name: base.file_name ?? null, file_size: base.file_size ?? null, mime_type: base.mime_type ?? null, duration_ms: base.duration_ms ?? null, status: "pending",
+      storage_path: null, file_name: base.file_name ?? null, file_size: base.file_size ?? null, mime_type: base.mime_type ?? null, duration_ms: base.duration_ms ?? null,
+      view_once: !!base.view_once, status: "pending",
     };
     setMsgs((cur) => cur.some((x) => x.client_id === client_id) ? cur.map((x) => x.client_id === client_id ? row : x) : [...cur, row]);
     setReplyTo(null); setError(null);
@@ -296,6 +297,7 @@ export function ChatApp({ meId }: { meId: string }) {
       const { data, error: e } = await supabase.from("messages").insert({
         client_id, conversation_id: cid, sender_id: meId, kind: row.kind, body: row.body, reply_to: row.reply_to,
         storage_path: path, file_name: row.file_name, file_size: row.file_size, mime_type: row.mime_type, duration_ms: row.duration_ms,
+        view_once: !!base.view_once,
       }).select("*").single();
       if (e) { if (e.code === "23505") return; throw e; } // 23505: already stored (duplicate retry)
       fileStore.current.delete(client_id);
@@ -307,8 +309,8 @@ export function ChatApp({ meId }: { meId: string }) {
     }
   };
 
-  const sendFile = (f: File, o?: { voice?: boolean; durationMs?: number }) =>
-    post({ kind: o?.voice ? "voice" : kindFromMime(f.type), file_name: f.name, file_size: f.size, mime_type: baseMime(f.type), duration_ms: o?.durationMs ?? null }, f);
+  const sendFile = (f: File, o?: { voice?: boolean; durationMs?: number; viewOnce?: boolean }) =>
+    post({ kind: o?.voice ? "voice" : kindFromMime(f.type), file_name: f.name, file_size: f.size, mime_type: baseMime(f.type), duration_ms: o?.durationMs ?? null, view_once: o?.viewOnce }, f);
 
   async function edit(m: Msg, body: string) {
     const t = body.trim();
@@ -320,6 +322,12 @@ export function ChatApp({ meId }: { meId: string }) {
   async function remove(m: Msg) {
     const { error: e } = await supabase.from("messages").update({ deleted_at: new Date().toISOString() }).eq("id", m.id);
     if (e) setError("Could not delete the message."); else setMsgs((c) => c.filter((x) => x.id !== m.id));
+  }
+  async function viewOnceSeen(m: Msg) {
+    if (m.sender_id === meId || !m.view_once || m.status === "pending" || m.status === "failed") return;
+    setMsgs((c) => c.filter((x) => x.id !== m.id)); // gone for everyone, instantly
+    const { error: e } = await supabase.rpc("mark_view_once_seen", { mid: m.id });
+    if (e) { setError("Could not destroy the view-once message."); setTick((t) => t + 1); } // refetch restores it if the RPC failed
   }
   async function react(m: Msg, emoji: string) {
     const has = reactions.some((r) => r.message_id === m.id && r.user_id === meId && r.emoji === emoji);
@@ -433,14 +441,15 @@ export function ChatApp({ meId }: { meId: string }) {
                   replied={m.reply_to ? byId.get(m.reply_to) : undefined} reactions={reactions.filter((r) => r.message_id === m.id)}
                   read={readIds.has(m.id)} showTicks={!!showTicks}
                   onReact={(e) => react(m, e)} onReply={() => setReplyTo(m)} onEdit={(b) => edit(m, b)} onDelete={() => remove(m)}
-                  onRetry={() => post(m, fileStore.current.get(m.client_id), m.client_id)} onReport={() => setReport({ userId: m.sender_id, messageId: m.id })} />
+                  onRetry={() => post(m, fileStore.current.get(m.client_id), m.client_id)} onReport={() => setReport({ userId: m.sender_id, messageId: m.id })}
+                  onViewOnce={() => viewOnceSeen(m)} />
               ))}
               <div ref={bottomRef} />
             </div>
             {error && <p role="alert" className="px-4 pb-1 text-sm text-err">{error}</p>}
             {replyTo && <div className="flex items-center justify-between border-t border-border bg-bg2 px-4 py-2 text-xs text-muted"><span className="truncate">Replying to: {replyTo.body ?? replyTo.file_name ?? "Attachment"}</span><button aria-label="Cancel reply" onClick={() => setReplyTo(null)}>✕</button></div>}
             {iBlockedPeer && <p className="bg-bg2 px-4 py-2 text-center text-xs text-muted">You blocked this user. Unblock to send messages.</p>}
-            <Composer disabled={iBlockedPeer} onText={(t) => post({ kind: "text", body: t })} onFile={sendFile} onTyping={sendTyping} />
+            <Composer disabled={iBlockedPeer} onText={(t, o) => post({ kind: "text", body: t, view_once: o?.viewOnce })} onFile={sendFile} onTyping={sendTyping} />
           </>
         )}
       </section>
